@@ -8,11 +8,15 @@ import {
   Command,
   Type,
 } from "https://deno.land/x/cliffy@v0.20.1/command/mod.ts";
+
+import * as path from "https://deno.land/std@0.114.0/path/mod.ts";
+
 import { ITypeInfo } from "https://deno.land/x/cliffy@v0.20.1/flags/mod.ts";
 
 import { Config } from "./formats/config.ts";
-import { FileDiff, FileType } from "./formats/utils.ts";
+import { Lockfile } from "./formats/lockfile.ts";
 import { writeLinks } from "./formats/linkfile.ts";
+import { FileDiff, FileType } from "./formats/utils.ts";
 
 const isCommandName = (str: string) => /^[a-z]+$/.test(str);
 
@@ -148,40 +152,59 @@ await new Command<void>()
     "leave the filesystem untouched (network activity and file reads are still expected)",
   )
   .action(async (params, uri, tags) => {
-    const path = params.configFile ?? "./images.config.json";
-    await Deno.permissions.request({ name: "read", path });
+    const configPath = params.configFile ?? "./images.config.json";
+    const outputPath = path.dirname(configPath);
+    const lockfilePath = path.join(outputPath, "lockfile.json");
 
-    const config = await Deno.readTextFile(path)
-      .then(JSON.parse)
-      .then(Config.from);
+    await Deno.permissions.request({ name: "read", path: outputPath });
 
     const isDry = params.dry || !canWrite;
 
     if (isDry) {
       console.debug(`running in dry mode`);
+    } else {
+      await Deno.permissions.request({ name: "write", path: outputPath });
     }
+
+    const config = await Deno.readTextFile(configPath)
+      .then(JSON.parse)
+      .then(Config.from);
+
+    const lockfile = await Deno.readTextFile(lockfilePath)
+      .then(JSON.parse)
+      .then((json) => new Lockfile(config, json));
 
     const res = await config.edit((prev) =>
       deepMerge(prev, {
         files: {
+          // todo: clean this mess
           [Date.now()]: {
             source: `${uri}`,
             tags: tags.map((tag) => ({ [tag.path.join(".")]: tag.value })),
           },
         },
-      }), { dry: isDry });
+      }), { dry: isDry, at: outputPath, lockfile });
 
     const diff = res.diff();
-
-    if (!isDry) {
-      writeLinks(diff);
-    }
 
     if (params.json) {
       console.log(JSON.stringify(diff));
     } else {
-      console.log(
-        displayFileDiff(diff),
+      const output = displayFileDiff(diff);
+      if (output.length > 0) {
+        console.log(output);
+      }
+    }
+
+    if (!isDry) {
+      await Promise.all(
+        writeLinks(diff, outputPath),
+      );
+
+      await Deno.writeTextFile(configPath, JSON.stringify(res.config));
+      await Deno.writeTextFile(
+        path.join(outputPath, "lockfile.json"),
+        JSON.stringify(res.lockfile),
       );
     }
   })

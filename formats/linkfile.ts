@@ -53,20 +53,20 @@ export class Linkfile implements ILinkfile {
   }
 }
 
-export function writeLinks(diff: FileDiff) {
+export function writeLinks(diff: FileDiff, at = "") {
   const promises = [];
 
   for (const link of diff.created) {
     if (link.type === "link") {
       promises.push(
-        ensureSymlink(path.resolve(link.from), path.resolve(link.to)),
+        ensureSymlink(path.resolve(at, link.from), path.resolve(at, link.to)),
       );
     }
   }
 
   for (const link of diff.removed) {
     const filePath = link.type === "link" ? link.to : link.path;
-    promises.push(Deno.remove(path.resolve(filePath)));
+    promises.push(Deno.remove(path.resolve(at, filePath)));
   }
 
   return promises;

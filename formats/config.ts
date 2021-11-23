@@ -19,7 +19,11 @@ export interface IConfig {
   files: Record<ID, FileInfo>;
 }
 
-type EditParams = ActionParams & { lockfile?: ILockfile; linkfile?: ILinkfile };
+type EditParams = ActionParams & {
+  lockfile?: ILockfile;
+  linkfile?: ILinkfile;
+  at: string;
+};
 
 export class Config implements IConfig {
   files: IConfig["files"];
@@ -45,11 +49,12 @@ export class Config implements IConfig {
     }: EditParams,
   ) {
     const edited = edits(this);
-    // const edited = deepMerge(this.toObject(), edits(this), { arrays: 'replace' });
+
     const lockfile = await Lockfile.from(edited, {
       ...params,
       prev: prevLockfile,
     });
+
     const linkfile = Linkfile.from(lockfile);
 
     return {
@@ -58,7 +63,7 @@ export class Config implements IConfig {
       linkfile: linkfile,
       diff() {
         return generateFileDiff(linkfile, {
-          prev: prevLinkfile ?? Linkfile.default(),
+          prev: prevLinkfile ?? Linkfile.from(lockfile),
         });
       },
     };
@@ -67,7 +72,7 @@ export class Config implements IConfig {
   // todo: change the way querying works to be more like jq or a small (and very simple) language? even regex might be enough
   // alternatively, I could make it as simple as possible and only have a command to output all the files and jq that externally or something
   search(
-    query: string,
+    _query: string,
     tags: {
       required: Tag[];
       include: Tag[];
@@ -77,7 +82,7 @@ export class Config implements IConfig {
     // twitter:status/whatever#foo|foo|foo|!foo|foo?
 
     // todo: weighting + sorting
-    return filterEntries(this.files, ([id, file]) => {
+    return filterEntries(this.files, ([_id, file]) => {
       const tagList = file.tags?.flatMap(parseConfigTag);
 
       // if every required tag exists on the entry

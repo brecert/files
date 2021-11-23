@@ -1,5 +1,6 @@
 // deno-lint-ignore-file camelcase
 import { crypto } from "https://deno.land/std@0.114.0/crypto/mod.ts";
+import { ensureDir } from "https://deno.land/std@0.114.0/fs/mod.ts";
 import * as path from "https://deno.land/std@0.114.0/path/mod.ts";
 
 import * as utils from "../utils.ts";
@@ -24,7 +25,7 @@ export interface ILockfile {
   file_locks: Record<ID, FileLock>;
 }
 
-export type LockfileParams = ActionParams & { prev: ILockfile };
+export type LockfileParams = ActionParams & { prev: ILockfile; at: string };
 
 export class Lockfile implements ILockfile {
   #config: IConfig;
@@ -46,7 +47,7 @@ export class Lockfile implements ILockfile {
     }
   }
 
-  async generate({ dry, prev }: LockfileParams) {
+  async generate({ dry, prev, at }: LockfileParams) {
     const config = this.#config;
     // const refetchURIs: URL[] = [];
     const filesToMove: Promise<{ path: string; hash: string }>[] = [];
@@ -96,13 +97,18 @@ export class Lockfile implements ILockfile {
     }
 
     if (!dry) {
+      const hashDir = path.resolve(at, ".hash");
+      await ensureDir(hashDir);
       // todo: async iter
-      Promise.all(filesToMove).then((paths) =>
+      const renames = await Promise.all(filesToMove).then((paths) =>
         paths.map((info) => {
+          const newPath = path.join(hashDir, info.hash);
+          console.debug(`moving ${info.path} to ${newPath}`);
           // TODO: remove hardcode here
-          Deno.rename(info.path, path.join("./images/.hash", info.hash));
+          return Deno.rename(info.path, newPath);
         })
       );
+      await Promise.all(renames);
     }
 
     return new Lockfile(config, lockfile);
