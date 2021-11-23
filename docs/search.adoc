@@ -1,0 +1,88 @@
+= Searcing
+:reproducible:
+
+Searching only has a few operators.
+
+Require `+tag`:: Requires this tag in the search
+Exclude `-tag`:: Excludes this tag from the search
+Include `~tag`:: Requires at least one `~` tag in the search
+
+One expression.
+
+Group `[ tags ]`:: Match at least one of the tags in the group
+
+And a few behaviors.
+
+// When searching you can imaging the word `and` being used in between each tag (ignoring `~`).
+
+// When inside of a group you can imagine `or` being used inbetween each tag.
+
+When searching using a tag that takes a value or has properties associated, it will implicitly wildcard search if nothing is specified afterwards.
+Ex. `+fur` searching for all types of fur `+fur.white +fur.black +fur.orange` and etc.., and `+girls` searching for `+girls:1 +girls:2 +girls:3` and etc..
+
+In the future, tags will be able to be defined with certain types associated with them, allowing for more search expressions such as `+girls:>3` or `+character:/pika*/`
+
+// Tag names are called "paths", they act like properties.
+
+// For example `+fur.white` would search for `fur.white`, however if we searched `+fur` it would search for `+fur.white +fur.black +fur.brown` and etc.. acting as a wildcard of sorts.
+
+// this has not been remotely implemented yet
+// To make searching easier and more friendly for some, you can define redefintion and renaming rules so that `+white_fur` maps to `+fur.white` 
+
+== Examples
+
+The search syntax is a work in progress and is not solidified.
+
+Search for animals `+animal`
+
+Search for animals that are a cat or dog `+animal [+cat +dog]`
+
+Search for animals with any kind of fur `+animal +fur` `cat dog wolf rabbit`
+
+Search for animals with black fur `+animal +fur.black`
+`black_cat black_bear black_sheep`
+
+Search for sheep or goats with pink or black wool
+`[+sheep +goats] [+wool.pink +wool.black]`
+`pink_sheep pink_goat black_sheep black_goat`
+
+Search for cats without black fur `+cat -fur.black`
+`white_cat orange_cat yellow_cat`
+
+Search for cats without black or white fur `+cat -fur.black -fur.white`
+`orange_cat yellow_cat brown_cat`
+
+Search for animals with fur or without claws `+animal [+fur -claw]`
+`cat cow sheep`
+
+Search for animals with fur and without claws `+animal +fur -claws` `cow`
+
+
+== Logictable
+
+[source]
+----
++foo
+foo
+
+-foo
+!foo
+
++foo +bar
+foo && bar
+
++foo -foo
+foo && !foo
+
++foo ~foo
+foo && (foo)
+
++animal ~cat ~dog
+animal && (cat || dog)
+
++animal ~sheep ~goat -wool.black
+animal && !wool.black && (sheep || goat)
+
++bovine ~sheep ~goat [~wool.black -wool.pink]
+bovine && (sheep || goat) && (wool.black || !wool.pink)
+----
