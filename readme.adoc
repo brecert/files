@@ -1,0 +1,14 @@
+= images
+:reproducible:
+
+
+Nothing to see here for now.
+
+If you would like to see what's going on, you can try this
+
+[source, fish]
+----
+$ mkdir images
+$ echo "{}" > ./images/config.json
+$ IMAGES_CONFIG_FILE="./images/config.json" deno run --unstable --allow-env --allow-read --allow-net ./cli.ts add --dry https://via.placeholder.com/90x75 +hello +gray +small
+----
