@@ -36,24 +36,19 @@ Search::
   `listof<tag | group, ' '>`
 
 Group::
-  `'[' ws listof<tag, ' '> ws ']'`
+  `'[' ws listof<tag, ' '> ws? ']'`
 
-Tag:: `with_value | simple`
-  with_value::: `prefix path ':' value`
-  simple::: `prefix path`
+Tag::
+  `prefix path (':' value)?`
 
 Value::
-  `number | string` +
-  value parsing will always parse as a string, and only evaluate to the right type when checking the property definitions.
+  value parsing will always parse as a string, and only evaluate to the right type when checking the property definitions. +
+  `number | string`
   number::: `\p{Number}`
-  string::: `quoted | simple`
-    quoted:::: `'"' [^"]+ '"'`
-    simple:::: `word`
+  string::: `('"' [^"]+ '"') | word`
 
-Prefix:: `require | include | exclude`
-  require::: `+`
-  include::: `~`
-  exclude::: `-`
+Prefix::
+  `'+' | '~' | '-'`
 
 Path::
   `listof<word, '.'>`
