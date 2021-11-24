@@ -223,6 +223,14 @@ await new Command<void>()
     throw new Error(`commnad 'remove' is not implemented yet.`);
   })
   .stopEarly()
+  // test
+  .command("test [tags...:string]", "testing cmd")
+  .hidden()
+  .action((...args) => {
+    console.log(args)
+    console.log(Deno.args)
+  })
+  .stopEarly()
   // parse
   .parse(Deno.args);
 

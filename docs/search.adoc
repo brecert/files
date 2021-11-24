@@ -32,6 +32,10 @@ In the future, tags will be able to be defined with certain types associated wit
 
 == Syntax
 
+Note that on the cli, while the syntax should resemble this, it will be different to better accommodate the cli's unique challenges when dealing with shells.
+- quoted strings instead relying on the behavior of the shell to interpolate the string into the argument
+- groups braces needing to be separated so parsing is unambiguous. `+foo [ +bar ] +baz` instead of `+foo [+bar] +baz`
+
 Search::
   `listof<tag | group, ' '>`
 
@@ -42,7 +46,7 @@ Tag::
   `prefix path (':' value)?`
 
 Value::
-  value parsing will always parse as a string, and only evaluate to the right type when checking the property definitions. +
+  value parsing will always parse as a string, and only evaluate to the right type when checking the path type definitions. +
   `number | string`
   number::: `\p{Number}`
   string::: `('"' [^"]+ '"') | word`
