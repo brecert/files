@@ -1,3 +1,5 @@
+import * as path from "https://deno.land/std@0.114.0/path/mod.ts";
+import { ensureFile } from "https://deno.land/std@0.114.0/fs/mod.ts";
 import {
   deepMerge,
   findLastIndex,
@@ -6,12 +8,9 @@ import {
 
 import {
   Command,
+  ITypeInfo,
   Type,
 } from "https://deno.land/x/cliffy@v0.20.1/command/mod.ts";
-
-import * as path from "https://deno.land/std@0.114.0/path/mod.ts";
-
-import { ITypeInfo } from "https://deno.land/x/cliffy@v0.20.1/flags/mod.ts";
 
 import { Config } from "./formats/config.ts";
 import { Lockfile } from "./formats/lockfile.ts";
@@ -114,14 +113,18 @@ class URIType extends Type<URL> {
   }
 }
 
-const res = await Deno.permissions.query({
-  name: "env",
-  variable: "IMAGES_CONFIG_FILE",
-});
+async function queryEnv(variable: string) {
+  const res = await Deno.permissions.query({
+    name: "env",
+    variable: variable,
+  });
 
-if (res.state === "denied") {
-  console.debug(`Unabled to read 'IMAGES_CONFIG_FILE' from env`);
+  if (res.state === "denied") {
+    console.debug(`Unabled to read '${variable}' from env`);
+  }
 }
+
+await queryEnv('IMAGES_CONFIG_FILE')
 
 const canWrite = await Deno.permissions.query({ name: "write" })
   .then((res) => res.state === "granted");
@@ -170,9 +173,20 @@ await new Command<void>()
       .then(JSON.parse)
       .then(Config.from);
 
-    const lockfile = await Deno.readTextFile(lockfilePath)
-      .then(JSON.parse)
-      .then((json) => new Lockfile(config, json));
+    let lockfile: Lockfile;
+    try {
+      lockfile = await Deno.readTextFile(lockfilePath)
+        .then(JSON.parse)
+        .then((json) => new Lockfile(config, json));
+    } catch (err) {
+      if (err instanceof Deno.errors.NotFound) {
+        // todo: clarify
+        console.error(`${err.message}, using empty lockfile instead`);
+        lockfile = Lockfile.default();
+      } else {
+        throw err;
+      }
+    }
 
     const res = await config.edit((prev) =>
       deepMerge(prev, {
@@ -227,8 +241,8 @@ await new Command<void>()
   .command("test [tags...:string]", "testing cmd")
   .hidden()
   .action((...args) => {
-    console.log(args)
-    console.log(Deno.args)
+    console.log(args);
+    console.log(Deno.args);
   })
   .stopEarly()
   // parse

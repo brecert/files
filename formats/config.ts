@@ -63,7 +63,7 @@ export class Config implements IConfig {
       linkfile: linkfile,
       diff() {
         return generateFileDiff(linkfile, {
-          prev: prevLinkfile ?? Linkfile.from(lockfile),
+          prev: prevLinkfile ?? Linkfile.default(),
         });
       },
     };
