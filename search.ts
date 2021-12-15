@@ -1,3 +1,10 @@
+import {
+  groupBy,
+  partition,
+} from "https://deno.land/std@0.117.0/collections/mod.ts";
+
+import * as common from "./formats/common.ts";
+
 const SEARCH =
   /((?:\[(?<group>.+?)\])|(?:(?<prefix>[+~-])(?<path>\w+(?:\.\w+)*)(?::(?<value1>\w+)|:"(?<value2>.+?)")?))/g;
 
@@ -65,5 +72,83 @@ export function parseSearch(str: string) {
     lastPos = match.index! + match[0].length;
   }
 
+  // todo: this could be better integrated into the rest of the function
+  if (exprs.length === 0 && str.trim().length > 0) {
+    const nextTok = str.search(/[^\s]/);
+    throw new ParsingError(`Unexpected token at ${nextTok}`);
+  }
+
   return exprs;
+}
+
+export type Match = {
+  require?: boolean;
+  include?: boolean;
+  exclude?: boolean;
+  groups: Match[];
+};
+
+/**
+ * Match tags with a parsed tag expression, returning with what succeeded and failed.
+ * @returns an object with lazy getters for each tag & group type returning what succeeded and failed.
+ */
+export function match(
+  matchTags: common.Tag[],
+  exprs: Expr[],
+): Match {
+  const [ungroupedTags, groups] = partition(
+    exprs,
+    (expr) => "type" in expr,
+  ) as [Tag[], Group[]];
+  const tags = groupBy(ungroupedTags, (t) => t.type) as Partial<
+    Record<
+      "require" | "include" | "exclude",
+      Tag[]
+    >
+  >;
+
+  const matchesTag = (t: Tag) =>
+    matchTags.some((tag) =>
+      t.value != null
+        ? tag.path === t.path && tag.value === t.value
+        : tag.path.startsWith(t.path)
+    );
+
+  // lazy for performance
+  return {
+    get require() {
+      return tags.require?.every(matchesTag);
+    },
+    get include() {
+      return tags.include?.some(matchesTag);
+    },
+    get exclude() {
+      return tags.exclude ? !tags.exclude.some(matchesTag) : undefined;
+    },
+    get groups() {
+      return groups.map((group) => match(matchTags, group.exprs));
+    },
+  };
+}
+
+// todo: better clarify the distinction between a match and a valid match
+/**
+ * Determines if a match result is a valid match
+ */
+export function isMatch(match: Match, isGroup = false): boolean {
+  if (!isGroup) {
+    return [
+      match.require,
+      match.include,
+      match.exclude,
+      match.groups.every((group) => isMatch(group, true)),
+    ].filter((m) => m != null).every((m) => m);
+  } else {
+    return (
+      match.include ||
+      match.exclude ||
+      match.require ||
+      match.groups.some((group) => isMatch(group, true))
+    );
+  }
 }
