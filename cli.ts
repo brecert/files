@@ -1,10 +1,5 @@
 import * as path from "https://deno.land/std@0.114.0/path/mod.ts";
-import { ensureFile } from "https://deno.land/std@0.114.0/fs/mod.ts";
-import {
-  deepMerge,
-  findLastIndex,
-  groupBy,
-} from "https://deno.land/std@0.114.0/collections/mod.ts";
+import { deepMerge } from "https://deno.land/std@0.114.0/collections/mod.ts";
 
 import {
   Command,
@@ -17,50 +12,9 @@ import { Lockfile } from "./formats/lockfile.ts";
 import { writeLinks } from "./formats/linkfile.ts";
 import { FileDiff, FileType } from "./formats/utils.ts";
 
-const isCommandName = (str: string) => /^[a-z]+$/.test(str);
-
-enum ArgType {
-  TagAdd = "tags",
-  TagSub = "tags",
-  Flag = "flags",
-  Other = "_",
-}
-
-function getTypeName(arg: string) {
-  if (arg.startsWith("+")) return ArgType.TagAdd;
-  if (arg.startsWith("--")) return ArgType.Flag;
-  if (arg.startsWith("-")) return ArgType.TagSub;
-  return ArgType.Other;
-}
-
-type Arg = {
-  name: string;
-  tags: string[];
-  _: string[];
-};
-function _parseArgs([...args]: string[]): Arg[] {
-  args.unshift("");
-  let idx: number | undefined = args.length;
-  const parsed = [];
-  do {
-    const last = idx;
-    idx = findLastIndex(args.slice(0, idx), isCommandName);
-    const [name, ...flags] = args.slice(idx, last);
-    const other = groupBy(flags.reverse(), getTypeName);
-    parsed.push({
-      name,
-      tags: [],
-      _: [],
-      ...other,
-    });
-  } while (idx != undefined && idx > 0);
-  return parsed.reverse();
-}
-
 enum TagMode {
   Add = "add",
   Remove = "remove",
-  // Unknown = "unknown",
 }
 
 const MODE: Record<string, TagMode> = {
@@ -124,7 +78,7 @@ async function queryEnv(variable: string) {
   }
 }
 
-await queryEnv('IMAGES_CONFIG_FILE')
+await queryEnv("IMAGES_CONFIG_FILE");
 
 const canWrite = await Deno.permissions.query({ name: "write" })
   .then((res) => res.state === "granted");
