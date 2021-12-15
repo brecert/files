@@ -12,6 +12,8 @@ import { Lockfile } from "./formats/lockfile.ts";
 import { writeLinks } from "./formats/linkfile.ts";
 import { FileDiff, FileType } from "./formats/utils.ts";
 
+import { parseSearch } from "./search.ts";
+
 enum TagMode {
   Add = "add",
   Remove = "remove",
@@ -83,6 +85,44 @@ await queryEnv("IMAGES_CONFIG_FILE");
 const canWrite = await Deno.permissions.query({ name: "write" })
   .then((res) => res.state === "granted");
 
+type Params = { configFile?: string; dry: boolean };
+async function getConfig(params: Params) {
+  const configPath = params.configFile ?? "./images.config.json";
+  const outputPath = path.dirname(configPath);
+  const lockfilePath = path.join(outputPath, "lockfile.json");
+
+  await Deno.permissions.request({ name: "read", path: outputPath });
+
+  const isDry = params.dry || !canWrite;
+
+  if (isDry) {
+    console.debug(`running in dry mode`);
+  } else {
+    await Deno.permissions.request({ name: "write", path: outputPath });
+  }
+
+  const config = await Deno.readTextFile(configPath)
+    .then(JSON.parse)
+    .then(Config.from);
+
+  let lockfile: Lockfile;
+  try {
+    lockfile = await Deno.readTextFile(lockfilePath)
+      .then(JSON.parse)
+      .then((json) => new Lockfile(config, json));
+  } catch (err) {
+    if (err instanceof Deno.errors.NotFound) {
+      // todo: clarify
+      console.error(`${err.message}, using empty lockfile instead`);
+      lockfile = Lockfile.default();
+    } else {
+      throw err;
+    }
+  }
+
+  return { config, lockfile, configPath, outputPath, lockfilePath, isDry };
+}
+
 await new Command<void>()
   .type("tag", new TagType(), { global: true })
   .type("uri", new URIType(), { global: true })
@@ -96,7 +136,7 @@ await new Command<void>()
   )
   // command to add new files
   .command<[URL, Tag[]]>(
-    "add <uri:uri> [tags...:tag]",
+    "add <uri:uri> <tags...:tag>",
     "Add a new image to the database",
   )
   .example(
@@ -109,38 +149,9 @@ await new Command<void>()
     "leave the filesystem untouched (network activity and file reads are still expected)",
   )
   .action(async (params, uri, tags) => {
-    const configPath = params.configFile ?? "./images.config.json";
-    const outputPath = path.dirname(configPath);
-    const lockfilePath = path.join(outputPath, "lockfile.json");
-
-    await Deno.permissions.request({ name: "read", path: outputPath });
-
-    const isDry = params.dry || !canWrite;
-
-    if (isDry) {
-      console.debug(`running in dry mode`);
-    } else {
-      await Deno.permissions.request({ name: "write", path: outputPath });
-    }
-
-    const config = await Deno.readTextFile(configPath)
-      .then(JSON.parse)
-      .then(Config.from);
-
-    let lockfile: Lockfile;
-    try {
-      lockfile = await Deno.readTextFile(lockfilePath)
-        .then(JSON.parse)
-        .then((json) => new Lockfile(config, json));
-    } catch (err) {
-      if (err instanceof Deno.errors.NotFound) {
-        // todo: clarify
-        console.error(`${err.message}, using empty lockfile instead`);
-        lockfile = Lockfile.default();
-      } else {
-        throw err;
-      }
-    }
+    const { config, lockfile, configPath, outputPath, isDry } = await getConfig(
+      params,
+    );
 
     const res = await config.edit((prev) =>
       deepMerge(prev, {
@@ -148,7 +159,11 @@ await new Command<void>()
           // todo: clean this mess
           [Date.now()]: {
             source: `${uri}`,
-            tags: tags.map((tag) => ({ [tag.path.join(".")]: tag.value })),
+            tags: tags.map((tag) =>
+              tag.value != null
+                ? ({ [tag.path.join(".")]: tag.value })
+                : tag.path.join(".")
+            ),
           },
         },
       }), { dry: isDry, at: outputPath, lockfile });
@@ -158,7 +173,7 @@ await new Command<void>()
     if (params.json) {
       console.log(JSON.stringify(diff));
     } else {
-      const output = displayFileDiff(diff);
+      const output = formatFileDiff(diff);
       if (output.length > 0) {
         console.log(output);
       }
@@ -169,7 +184,7 @@ await new Command<void>()
         writeLinks(diff, outputPath),
       );
 
-      await Deno.writeTextFile(configPath, JSON.stringify(res.config));
+      await Deno.writeTextFile(configPath, JSON.stringify(res.config, null, 2));
       await Deno.writeTextFile(
         path.join(outputPath, "lockfile.json"),
         JSON.stringify(res.lockfile),
@@ -192,19 +207,39 @@ await new Command<void>()
   })
   .stopEarly()
   // test
-  .command("test [tags...:string]", "testing cmd")
-  .hidden()
-  .action((...args) => {
-    console.log(args);
-    console.log(Deno.args);
+  .command<[string[]]>(
+    "search <search...:string>",
+    "search for specific files with tags.",
+  )
+  .action(async (params, search) => {
+    const { config } = await getConfig({ ...params, dry: true });
+
+    const fixed = fixSearchInput(search).join(" ");
+    const parsed = parseSearch(fixed);
+    // console.log(parsed, config);
+    console.log(
+      config.search(parsed),
+    );
   })
   .stopEarly()
   // parse
   .parse(Deno.args);
 
 //! Utils
+function fixSearchInput(args: string[]) {
+  return args.map((arg) => {
+    const idx = arg.indexOf(":");
+    if (idx >= 0) {
+      const value = arg.slice(idx + 1);
+      if (/\s/.test(value)) {
+        return `${arg.slice(0, idx)}:"${value}"`;
+      }
+    }
+    return arg;
+  });
+}
 
-function displayFileType(fileType: FileType) {
+function formatFileType(fileType: FileType) {
   switch (fileType.type) {
     case "file":
       return fileType.path;
@@ -213,9 +248,9 @@ function displayFileType(fileType: FileType) {
   }
 }
 
-function displayFileDiff(linkDiff: FileDiff) {
+function formatFileDiff(linkDiff: FileDiff) {
   return [
-    linkDiff.created.map(displayFileType).map((str) => `+ ${str}`),
-    linkDiff.removed.map(displayFileType).map((str) => `- ${str}`),
+    linkDiff.created.map(formatFileType).map((str) => `+ ${str}`),
+    linkDiff.removed.map(formatFileType).map((str) => `- ${str}`),
   ].flat().join("\n");
 }
