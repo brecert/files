@@ -1,10 +1,12 @@
 import { filterEntries } from "https://deno.land/std@0.114.0/collections/mod.ts";
 
-import { ActionParams, ID, Tag } from "./common.ts";
+import { ActionParams, ID } from "./common.ts";
 
 import { generateFileDiff, parseConfigTag } from "./utils.ts";
 import { ILockfile, Lockfile } from "./lockfile.ts";
 import { ILinkfile, Linkfile } from "./linkfile.ts";
+
+import * as search from "../search.ts";
 
 //! Config
 
@@ -32,8 +34,8 @@ export class Config implements IConfig {
     return new this({ files: {} });
   }
 
-  static from = (config: IConfig) => {
-    return new this(config);
+  static from = (config: Partial<IConfig>) => {
+    return new this({ ...this.default(), ...config });
   };
 
   constructor(config: IConfig) {
@@ -63,7 +65,7 @@ export class Config implements IConfig {
       linkfile: linkfile,
       diff() {
         return generateFileDiff(linkfile, {
-          prev: prevLinkfile ?? Linkfile.default(),
+          prev: prevLinkfile ?? Linkfile.from(prevLockfile),
         });
       },
     };
@@ -71,31 +73,10 @@ export class Config implements IConfig {
 
   // todo: change the way querying works to be more like jq or a small (and very simple) language? even regex might be enough
   // alternatively, I could make it as simple as possible and only have a command to output all the files and jq that externally or something
-  search(
-    _query: string,
-    tags: {
-      required: Tag[];
-      include: Tag[];
-      exclude: Tag[];
-    },
-  ) {
-    // twitter:status/whatever#foo|foo|foo|!foo|foo?
-
-    // todo: weighting + sorting
+  search(query: search.Expr[]) {
     return filterEntries(this.files, ([_id, file]) => {
-      const tagList = file.tags?.flatMap(parseConfigTag);
-
-      // if every required tag exists on the entry
-      if (!tags.required.every((tag) => tagList?.includes(tag))) return false;
-
-      // if at least one of the include tags exists on the entry
-      if (!tagList?.some((tag) => tags.include.includes(tag))) return false;
-
-      // if none of the exlucded tags exists on the entry
-      if (tagList?.some((tag) => tags.exclude.includes(tag))) return false;
-
-      // then return true
-      return true;
+      const tagList = file.tags?.flatMap(parseConfigTag) ?? [];
+      return search.isMatch(search.match(tagList, query));
     });
   }
 

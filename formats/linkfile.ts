@@ -3,9 +3,9 @@ import { deepMerge } from "https://deno.land/std@0.114.0/collections/mod.ts";
 import * as path from "https://deno.land/std@0.114.0/path/mod.ts";
 
 import { FileDiff } from "./utils.ts";
-import { Lockfile } from "./lockfile.ts";
+import { Lockfile, ILockfile } from "./lockfile.ts";
 
-export function genLinkPaths(lockfile: Lockfile, id: string) {
+export function genLinkPaths(lockfile: ILockfile, id: string) {
   const lock = lockfile.file_locks[id];
   return lock.tags.map((tag) => {
     return path.join(tag.path, tag.value ?? "", id);
@@ -17,18 +17,18 @@ export interface ILinkfile {
 }
 
 export class Linkfile implements ILinkfile {
-  #lockfile: Lockfile;
+  #lockfile: ILockfile;
   links: ILinkfile["links"] = {};
 
   static default() {
     return new this(Lockfile.default());
   }
 
-  static from(lockfile: Lockfile) {
+  static from(lockfile: ILockfile) {
     return new this(lockfile).generate();
   }
 
-  constructor(lockfile: Lockfile, linkfile?: ILinkfile) {
+  constructor(lockfile: ILockfile, linkfile?: ILinkfile) {
     this.#lockfile = lockfile;
     if (linkfile) {
       this.links = linkfile.links;
