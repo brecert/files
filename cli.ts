@@ -192,7 +192,7 @@ await new Command<void>()
     }
   })
   .stopEarly()
-  // command to remove a file
+  // remove
   .command<[string, Tag[]]>(
     "remove <query:string> [tags...:tag]",
     "Remove queried images from the database",
@@ -203,23 +203,26 @@ await new Command<void>()
     "leave the filesystem untouched (network activity and file reads are still expected)",
   )
   .action((_params, _query, _tags) => {
-    throw new Error(`commnad 'remove' is not implemented yet.`);
+    throw new Error(`command 'remove' is not implemented yet.`);
   })
   .stopEarly()
-  // test
+  // search
   .command<[string[]]>(
     "search <search...:string>",
     "search for specific files with tags.",
   )
+  .option<{ json: boolean }>("--json", "output json")
   .action(async (params, search) => {
     const { config } = await getConfig({ ...params, dry: true });
 
     const fixed = fixSearchInput(search).join(" ");
-    const parsed = parseSearch(fixed);
-    // console.log(parsed, config);
-    console.log(
-      config.search(parsed),
-    );
+    const results = config.search(parseSearch(fixed))
+
+    if(params.json) {
+      console.log(JSON.stringify(results))
+    } else {
+      console.log(Object.keys(results).join('\n'))
+    }
   })
   .stopEarly()
   // parse
