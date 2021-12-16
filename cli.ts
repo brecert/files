@@ -26,7 +26,7 @@ const MODE: Record<string, TagMode> = {
 
 type Tag = {
   mode: TagMode;
-  path: string[];
+  path: string;
   value: string;
 };
 
@@ -38,7 +38,7 @@ function parseTag(tag: string): Tag {
 
   return {
     mode: mode,
-    path: path.split("."),
+    path: path,
     value: value,
   };
 }
@@ -160,9 +160,7 @@ await new Command<void>()
           [Date.now()]: {
             source: `${uri}`,
             tags: tags.map((tag) =>
-              tag.value != null
-                ? ({ [tag.path.join(".")]: tag.value })
-                : tag.path.join(".")
+              tag.value != null ? ({ [tag.path]: tag.value }) : tag.path
             ),
           },
         },
@@ -216,12 +214,12 @@ await new Command<void>()
     const { config } = await getConfig({ ...params, dry: true });
 
     const fixed = fixSearchInput(search).join(" ");
-    const results = config.search(parseSearch(fixed))
+    const results = config.search(parseSearch(fixed));
 
-    if(params.json) {
-      console.log(JSON.stringify(results))
+    if (params.json) {
+      console.log(JSON.stringify(results));
     } else {
-      console.log(Object.keys(results).join('\n'))
+      console.log(Object.keys(results).join("\n"));
     }
   })
   .stopEarly()
