@@ -14,6 +14,8 @@ import { FileDiff, FileType } from "./formats/utils.ts";
 
 import { parseSearch } from "./search.ts";
 
+const VERSION = '0.1.0'
+
 enum TagMode {
   Add = "add",
   Remove = "remove",
@@ -127,7 +129,7 @@ await new Command<void>()
   .type("tag", new TagType(), { global: true })
   .type("uri", new URIType(), { global: true })
   .name("images")
-  .version("0.1.0")
+  .version(VERSION)
   .description("Local image database")
   .env<{ configFile?: string }>(
     "IMAGES_CONFIG_FILE=<value:string>",
@@ -157,7 +159,7 @@ await new Command<void>()
       deepMerge(prev, {
         files: {
           // todo: clean this mess
-          [Date.now()]: {
+          [`${uri}-${Date.now()}`]: {
             source: `${uri}`,
             tags: tags.map((tag) =>
               tag.value != null ? ({ [tag.path]: tag.value }) : tag.path
